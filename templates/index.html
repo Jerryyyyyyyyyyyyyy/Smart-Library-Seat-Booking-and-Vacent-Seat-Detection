@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Space Seat Map</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        /* Background with image and gradient */
+        body {
+            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/static/img.jpeg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            animation: subtlePulse 10s ease infinite;
+        }
+        @keyframes subtlePulse {
+            0% { background-size: 100%; }
+            50% { background-size: 105%; }
+            100% { background-size: 100%; }
+        }
+        /* Transparent header with subtle shadow */
+        header {
+            background: transparent;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        /* Canvas hover effect */
+        #seatCanvas {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        /* Loading spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Tooltip */
+        .tooltip {
+            visibility: hidden;
+            background-color: #1e3a8a;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            position: absolute;
+            z-index: 10;
+            font-size: 14px;
+        }
+        /* Seat animation */
+        .seat-animate {
+            animation: pulse 0.5s ease;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        /* Typewriter effect for subtitle */
+        .typewriter {
+            overflow: hidden;
+            border-right: 0.15em solid white;
+            white-space: nowrap;
+            margin: 0 auto;
+            animation: typing 3s steps(40, end), blink-caret 0.75s step-end infinite;
+        }
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent; }
+            50% { border-color: white; }
+        }
+        /* Vibrant link hover */
+        .link:hover {
+            color: #fefcbf;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col items-center">
+    <!-- Header -->
+    <header class="w-full py-4 text-center">
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-yellow-300">Study Space: Pick Your Power Spot!</h1>
+        <p class="text-lg mt-2 typewriter max-w-2xl">Click a green seat to lock in your 1-hour study zone!</p>
+    </header>
+
+    <!-- Status Bar -->
+    <div class="container mx-auto px-4 py-4 text-center">
+        <p id="statusBar" class="text-lg font-medium">
+            {% if current_user.is_authenticated %}
+                What's up, {{ current_user.id }}? Time to claim your study throne! 
+                <span id="bookedSeat" class="text-yellow-300">Scanning for your spot...</span>
+            {% else %}
+                Yo, <a href="/login" class="link text-blue-300 hover:text-yellow-300">jump in</a> to reserve your study zone!
+            {% endif %}
+        </p>
+        <div class="spinner mx-auto mt-2" id="loadingSpinner"></div>
+    </div>
+
+    <!-- Canvas for Seat Map -->
+    <canvas id="seatCanvas" width="600" height="400" class="border border-gray-300 shadow-lg rounded-lg"></canvas>
+
+    <!-- Legend -->
+    <div class="container mx-auto px-4 py-4 flex justify-center space-x-4">
+        <div class="flex items-center">
+            <div class="w-4 h-4 bg-green-500 rounded mr-2"></div>
+            <span>Ready to Rock</span>
+        </div>
+        <div class="flex items-center">
+            <div class="w-4 h-4 bg-red-500 rounded mr-2"></div>
+            <span>Occupied</span>
+        </div>
+        <div class="flex items-center">
+            <div class="w-4 h-4 bg-blue-500 rounded mr-2"></div>
+            <span>Locked In</span>
+        </div>
+    </div>
+
+    <!-- Back to Home -->
+    <a href="/" class="btn inline-block bg-yellow-500 text-white px-8 py-4 rounded-lg font-bold text-lg transition duration-300 mt-4 hover:bg-yellow-400">Back to Study Hub</a>
+
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('seatCanvas');
+        const ctx = canvas.getContext('2d');
+        let seats = [];
+
+        function loadSeats() {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            fetch('/seats')
+                .then(response => response.json())
+                .then(data => {
+                    seats = data;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    seats.forEach(seat => {
+                        const id = seat.seat_id;
+                        const width = seat.x2 - seat.x1;
+                        const height = seat.y2 - seat.y1;
+                        ctx.fillStyle = seat.status === 'Vacant' ? '#4CAF50' : (seat.status === 'Occupied' ? '#f44336' : '#2196F3');
+                        ctx.fillRect(seat.x1, seat.y1, width, height);
+                        ctx.strokeStyle = '#000';
+                        ctx.strokeRect(seat.x1, seat.y1, width, height);
+                        ctx.fillStyle = 'white';
+                        ctx.font = '16px Arial';
+                        ctx.fillText(`Seat ${id}`, seat.x1 + 10, seat.y1 + height / 2);
+                    });
+
+                    // Update booked seat status
+                    fetch('/user_booking')
+                        .then(response => response.json())
+                        .then(data => {
+                            const bookedSeat = document.getElementById('bookedSeat');
+                            bookedSeat.textContent = data.seat_id ? `Your throne: Seat ${data.seat_id}!` : 'No spot reserved yet!';
+                        });
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                })
+                .catch(err => {
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    alert('Error loading seats: ' + err);
+                });
+        }
+
+        function bookSeat(seatId) {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            fetch('/book', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seat_id: seatId, student_id: "{{ current_user.id }}" })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                if (data.success) {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                    const seat = seats.find(s => s.seat_id === seatId);
+                    if (seat) {
+                        seat.status = 'Booked';
+                        const width = seat.x2 - seat.x1;
+                        const height = seat.y2 - seat.y1;
+                        ctx.fillStyle = '#2196F3';
+                        ctx.fillRect(seat.x1, seat.y1, width, height);
+                        ctx.strokeRect(seat.x1, seat.y1, width, height);
+                        ctx.fillStyle = 'white';
+                        ctx.fillText(`Seat ${seatId}`, seat.x1 + 10, seat.y1 + height / 2);
+                        canvas.classList.add('seat-animate');
+                        setTimeout(() => canvas.classList.remove('seat-animate'), 500);
+                    }
+                    document.getElementById('bookedSeat').textContent = `Your throne: Seat ${data.seat_id}!`;
+                }
+                alert(data.message);
+            })
+            .catch(err => {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                alert('Error booking seat: ' + err);
+            });
+        }
+
+        // Tooltip and click handling
+        canvas.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            let tooltip = document.getElementById('tooltip');
+            if (!tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.id = 'tooltip';
+                tooltip.className = 'tooltip';
+                document.body.appendChild(tooltip);
+            }
+            let found = false;
+            seats.forEach(seat => {
+                if (x >= seat.x1 && x <= seat.x2 && y >= seat.y1 && y <= seat.y2) {
+                    tooltip.style.visibility = 'visible';
+                    tooltip.textContent = `Seat ${seat.seat_id}: ${seat.status}${seat.status === 'Vacant' ? ' - Snag it now!' : ''}`;
+                    tooltip.style.left = `${e.clientX + 10}px`;
+                    tooltip.style.top = `${e.clientY + 10}px`;
+                    found = true;
+                }
+            });
+            if (!found) tooltip.style.visibility = 'hidden';
+        };
+
+        canvas.onclick = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            seats.forEach(seat => {
+                if (seat.status === 'Vacant' && x >= seat.x1 && x <= seat.x2 && y >= seat.y1 && y <= seat.y2) {
+                    bookSeat(seat.seat_id);
+                }
+            });
+        };
+
+        // Keyboard accessibility
+        canvas.tabIndex = 0;
+        canvas.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                const selectedSeat = seats.find(seat => seat.status === 'Vacant');
+                if (selectedSeat) bookSeat(selectedSeat.seat_id);
+            }
+        };
+
+        socket.on('update_seats', () => loadSeats());
+        loadSeats();
+    </script>
+</body>
+</html>
