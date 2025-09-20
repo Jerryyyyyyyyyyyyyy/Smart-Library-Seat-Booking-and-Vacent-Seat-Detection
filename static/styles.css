@@ -1,0 +1,66 @@
+#seatCanvas {
+    border: 1px solid #000;
+    max-width: 100%;
+    margin: 20px auto;
+    display: block;
+}
+
+.seat {
+    padding: 20px;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.vacant {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+.occupied {
+    background-color: #f44336; /* Red */
+    color: white;
+    cursor: not-allowed;
+}
+
+.booked {
+    background-color: #2196F3; /* Blue */
+    color: white;
+    cursor: not-allowed;
+}
+
+form {
+    max-width: 300px;
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    width: 100%;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
